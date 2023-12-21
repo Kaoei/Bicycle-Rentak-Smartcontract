@@ -1,4 +1,4 @@
-import { Result, text, int64, Opt, StableBTreeMap, Void as AzleVoid, Canister, update, bool } from 'azle';
+import { Result, text, int64, Opt, StableBTreeMap, Void as AzleVoid, Canister, update, bool, query } from 'azle';
 
 type Renter = {
     renterId: int64;
@@ -6,6 +6,7 @@ type Renter = {
     rentTime: text,
     bicycleId?:int64,
 };
+
 
 type Bicycle = {
     bicycleId: int64;
@@ -62,65 +63,70 @@ export default Canister({
         return uniqueBicycleId;
     }),
 
-    rentBicycle: update([int64, text], int64, (userId, time) => {
-        
-        const user = userDB.get(userId);
 
+    rentBicycle: update([int64, text], int64, (userId, time) => {
+        const user = userDB.get(userId);
+    
         if (user === null) {
             return Result.Err('User does not exist. Please create an account.');
         }
-
-        const bicycle = bicycleDB.get(BigInt(1));
-
-        if (bicycle === null) {
+    
+        const bicycleOpt = bicycleDB.get(BigInt(1));
+    
+        if (!bicycleOpt.Some) {
             return Result.Err('Bicycle does not exist.');
         }
-
+    
+        const bicycle = bicycleOpt.Some;
+    
         if (!bicycle.isAvailable) {
             return Result.Err('Bicycle is currently unavailable.');
         }
-
+    
         const uniqueRentId = generateUniqueId();
-
+    
         const newRent: Renter = {
             renterId: uniqueRentId,
             renterUserId: userId,
             rentTime: time,
         };
-
+    
         renterDB.insert(uniqueRentId, newRent);
-
+    
         const updatedBicycle: Bicycle = {
             ...bicycle,
             isAvailable: false,
             renterId: userId,
         };
-
+    
         bicycleDB.insert(BigInt(1), updatedBicycle);
-
+    
         return uniqueRentId;
     }),
-
+    
     returnBicycle: update([int64], bool, (userId) => {
-        const bicycle = bicycleDB.get(BigInt(1));
-
-        if (bicycle === null) {
+        const bicycleOpt = bicycleDB.get(BigInt(1));
+    
+        if (!bicycleOpt.Some) {
             return Result.Err('Bicycle does not exist.');
         }
-
+    
+        const bicycle = bicycleOpt.Some;
+        const renter = renterDB.get(userId);
+    
         if (bicycle.renterId !== userId) {
             return Result.Err('User does not have the right to return this bicycle.');
         }
-
+    
         const updatedBicycle: Bicycle = {
             ...bicycle,
             isAvailable: true,
-            bicycleId:bicycle.bicycleId,
-            renterId: userId,
+            renterId: BigInt(1),
         };
-
+    
         bicycleDB.insert(BigInt(1), updatedBicycle);
-
+    
         return true;
     }),
+    
 });
