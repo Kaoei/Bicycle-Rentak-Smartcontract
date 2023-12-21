@@ -1,126 +1,225 @@
-import { Result, text, int64, Opt, StableBTreeMap, Void as AzleVoid, Canister, update, bool } from 'azle';
-
-type Renter = {
-    renterId: int64;
-    renterUserId?: int64;
-    rentTime: text,
-    bicycleId?:int64,
-};
-
-type Bicycle = {
-    bicycleId: int64;
-    type: text;
+import {
+    $update,
+    $query,
+    Record,
+    StableBTreeMap,
+    match,
+    Result,
+    nat64,
+    ic,
+    Opt,
+  } from "azle";
+  import { v4 as uuidv4 } from "uuid";
+  
+  type Renter = Record<{
+    renterId: string;
+    renterUserId: string;
+    rentTime: string;
+    bicycleId: string;
+  }>;
+  
+  type RenterPayload = Record<{
+    rentTime: string;
+    bicycleId: string;
+  }>;
+  
+  type Bicycle = Record<{
+    bicycleId: string;
+    type: string;
     isAvailable: boolean;
-    renterId?: int64;
-};
-
-type User = {
-    userId: int64;
-    userName: text;
-    userAddress: text;
-    userAge: int64;
-};
-
-// Function to generate a unique ID
-function generateUniqueId(): int64 {
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000);
-    const idString = `${timestamp}${randomNum}`;
-    return BigInt(idString);
-}
-
-const renterDB = StableBTreeMap<int64, Renter>(0);
-const bicycleDB = StableBTreeMap<int64, Bicycle>(1);
-const userDB = StableBTreeMap<int64, User>(2);
-
-export default Canister({
-    createUser: update([text, text, int64], int64, (name, address, age) => {
-        const uniqueUserId = generateUniqueId();
-
-        const newUser: User = {
-            userId: uniqueUserId,
-            userName: name,
-            userAddress: address,
-            userAge: age,
-        };
-
-        userDB.insert(uniqueUserId, newUser);
-
-        return uniqueUserId;
-    }),
-    addBicycle: update([text, bool], int64, (type, isAvailable) => {
-        const uniqueBicycleId = generateUniqueId();
+    renterId: string;
+    createdAt: nat64;
+    updatedAt: Opt<nat64>;
+  }>;
+  
+  type BicyclePayload = Record<{
+    type: string;
+    isAvailable: boolean;
+    renterId: string;
+  }>;
+  
+  type User = Record<{
+    userId: string;
+    userName: string;
+    userAddress: string;
+    userAge: string;
+    createdAt: nat64;
+    updatedAt: Opt<nat64>;
+  }>;
+  
+  type UserPayload = Record<{
+    userName: string;
+    userAddress: string;
+    userAge: string;
+  }>;
+  
+  
+  // Payload Validation function
+  function validateUserPayload(payload: UserPayload): Result<void, string> {
+    if (!payload.userName || !payload.userAddress || !payload.userAge) {
+      return Result.Err("Missing required fields in the payload.");
+    }
+    return Result.Ok(undefined);
+  }
+  
+  // Payload Validation function
+  function validateBicyclePayload(payload: BicyclePayload): Result<void, string> {
+    if (!payload.type || !payload.isAvailable || !payload.renterId) {
+      return Result.Err("Missing required fields in the payload.");
+    }
+    return Result.Ok(undefined);
+  }
+  
+  const renterDB = new StableBTreeMap<string, Renter>(0, 44, 1024);
+  const bicycleDB = new StableBTreeMap<string, Bicycle>(1, 44, 1024);
+  const userDB = new StableBTreeMap<string, User>(2, 44, 1024);
+  
+  $update
+  export function createUser(payload: UserPayload): Result<User, string> {
+    try {
+      // Validate payload
+      if (!payload.userName || !payload.userAddress || !payload.userAge) {
+        return Result.Err("Missing required fields in the payload.");
+      }
+      // Validate UUID
+      const uniqueUserId = uuidv4();
+      
+      const newUser: User = {
+        userId: uniqueUserId,
+        userName: payload.userName,
+        userAddress: payload.userAddress,
+        userAge: payload.userAge,
+        updatedAt: Opt.None,
+        createdAt: ic.time(),
+      };
+  
+      userDB.insert(uniqueUserId, newUser);
+  
+      return Result.Ok(newUser);
+    } catch (error) {
+      return Result.Err(`Failed to create user: ${error}`);
+    }
+  }
+  
+  $update
+  export function addBicycle(payload: BicyclePayload): Result<Bicycle, string> {
+    try {
+      // Validate payload
+      if (!payload.type || !payload.isAvailable || !payload.renterId) {
+        return Result.Err("Missing required fields in the payload.");
+      }
+      // Validate UUID
+      const uniqueBicycleId = uuidv4();
+      
+      const newBicycle: Bicycle = {
+        bicycleId: uniqueBicycleId,
+        type: payload.type,
+        isAvailable: payload.isAvailable,
+        renterId: payload.renterId,
+        updatedAt: Opt.None,
+        createdAt: ic.time(),
+      };
+  
+      bicycleDB.insert(uniqueBicycleId, newBicycle);
+  
+      return Result.Ok(newBicycle);
+    } catch (error) {
+      return Result.Err(`Failed to add bicycle: ${error}`);
+    }
+  }
+  
+  
+  $update
+  export function rentBicycle(userId: string, payload:RenterPayload): Result<Renter, string> {
+    // Validate payload
+    if (!payload.rentTime || payload.bicycleId) {
+      return Result.Err("Missing required fields in the payload.");
+    }
+  
+    if (!userId) {
+      return Result.Err("Missing or Invalid userId.");
+    }
+  
+    return match(userDB.get(userId), {
+        Some: (user) => {
+            const bicycleId = payload.bicycleId; // Assuming you want to generate a unique ID for each bicycle
+            return match(bicycleDB.get(bicycleId), {
+                Some: (bicycle) => {
+                    if (!bicycle.isAvailable) {
+                        return Result.Err<Renter, string>('Bicycle is currently unavailable.');
+                    }
+  
+                    const uniqueRentId = uuidv4();
+  
+                    const newRent: Renter = {
+                        renterId: uniqueRentId,
+                        renterUserId: userId,
+                        rentTime: payload.rentTime,
+                        bicycleId: bicycleId,
+                    };
+  
+                    renterDB.insert(uniqueRentId, newRent);
+  
+                    const updatedBicycle: Bicycle = {
+                        ...bicycle,
+                        isAvailable: false,
+                        renterId: userId,
+                    };
+  
+                    bicycleDB.insert(bicycleId, updatedBicycle);
+  
+                    return Result.Ok<Renter, string>(newRent);
+                },
+                None: () => Result.Err<Renter, string>('Bicycle does not exist.'),
+            });
+        },
+        None: () => Result.Err<Renter, string>('User does not exist. Please create an account.'),
+    });
+  }
+  
+  $update
+  export function returnBicycle(userId: string, bicycleId: string): Result<boolean, string> {
     
-        const newBicycle: Bicycle = {
-            bicycleId: uniqueBicycleId,
-            type: type,
-            isAvailable: isAvailable,
-        };
+    if (!userId) {
+      return Result.Err("Missing or Invalid userId.");
+    }
+  
     
-        bicycleDB.insert(uniqueBicycleId, newBicycle);
-    
-        return uniqueBicycleId;
-    }),
-
-    rentBicycle: update([int64, text], int64, (userId, time) => {
-        
-        const user = userDB.get(userId);
-
-        if (user === null) {
-            return Result.Err('User does not exist. Please create an account.');
-        }
-
-        const bicycle = bicycleDB.get(BigInt(1));
-
-        if (bicycle === null) {
-            return Result.Err('Bicycle does not exist.');
-        }
-
-        if (!bicycle.isAvailable) {
-            return Result.Err('Bicycle is currently unavailable.');
-        }
-
-        const uniqueRentId = generateUniqueId();
-
-        const newRent: Renter = {
-            renterId: uniqueRentId,
-            renterUserId: userId,
-            rentTime: time,
-        };
-
-        renterDB.insert(uniqueRentId, newRent);
-
-        const updatedBicycle: Bicycle = {
-            ...bicycle,
-            isAvailable: false,
-            renterId: userId,
-        };
-
-        bicycleDB.insert(BigInt(1), updatedBicycle);
-
-        return uniqueRentId;
-    }),
-
-    returnBicycle: update([int64], bool, (userId) => {
-        const bicycle = bicycleDB.get(BigInt(1));
-
-        if (bicycle === null) {
-            return Result.Err('Bicycle does not exist.');
-        }
-
+    if (!bicycleId) {
+      return Result.Err("Missing or Invalid userId.");
+    }
+  
+    return match(bicycleDB.get(bicycleId), {
+      Some: (bicycle) => {
         if (bicycle.renterId !== userId) {
-            return Result.Err('User does not have the right to return this bicycle.');
+          return Result.Err<boolean, string>('User does not have the right to return this bicycle.');
         }
-
+  
         const updatedBicycle: Bicycle = {
-            ...bicycle,
-            isAvailable: true,
-            bicycleId:bicycle.bicycleId,
-            renterId: userId,
+          ...bicycle,
+          isAvailable: true,
+          renterId: "", // Set the renterId to an empty string or null based on your requirement
         };
-
-        bicycleDB.insert(BigInt(1), updatedBicycle);
-
-        return true;
-    }),
-});
+  
+        bicycleDB.insert(bicycleId, updatedBicycle);
+  
+        return Result.Ok<boolean, string>(true);
+      },
+      None: () => Result.Err<boolean, string>('Bicycle does not exist.'),
+    });
+  }
+  
+  
+  
+  
+  globalThis.crypto = {
+    // @ts-ignore
+    getRandomValues: () => {
+        let array = new Uint8Array(32);
+        for (let i = 0; i < array.length; i++) {
+            array[i] = Math.floor(Math.random() * 256);
+        }
+        return array;
+    },
+  };
+  

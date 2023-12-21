@@ -2,12 +2,11 @@
     "canisters": {
         "rental-bicycle": {
             "type": "custom",
-            "main": "src/index.ts",
-            "candid": "src/index.did",
             "build": "npx azle rental-bicycle",
-            "wasm": ".azle/rental-bicycle/rental-bicycle.wasm",
-            "gzip": true
+            "root": "src",
+            "ts": "src/index.ts",
+            "candid": "src/index.did",
+            "wasm": ".azle/rental-bicycle/rental-bicycle.wasm.gz"
         }
     }
 }
-
