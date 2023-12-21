@@ -1,6 +1,43 @@
-service: () -> {
-    addBicycle: (text, bool) -> (int64);
-    createUser: (text, text, int64) -> (int64);
-    rentBicycle: (int64, text) -> (int64);
-    returnBicycle: (int64) -> (bool);
+type Bicycle = record {
+  createdAt : nat64;
+  "type" : text;
+  isAvailable : bool;
+  updatedAt : opt nat64;
+  renterId : text;
+  bicycleId : text;
+};
+type BicyclePayload = record {
+  "type" : text;
+  isAvailable : bool;
+  renterId : text;
+};
+type Renter = record {
+  rentTime : text;
+  renterUserId : text;
+  renterId : text;
+  bicycleId : text;
+};
+type RenterPayload = record { rentTime : text; bicycleId : text };
+type User = record {
+  userName : text;
+  userId : text;
+  createdAt : nat64;
+  userAddress : text;
+  userAge : text;
+  updatedAt : opt nat64;
+};
+type UserPayload = record {
+  userName : text;
+  userAddress : text;
+  userAge : text;
+};
+type _AzleResult = variant { Ok : Bicycle; Err : text };
+type _AzleResult_1 = variant { Ok : User; Err : text };
+type _AzleResult_2 = variant { Ok : Renter; Err : text };
+type _AzleResult_3 = variant { Ok : bool; Err : text };
+service : () -> {
+  addBicycle : (BicyclePayload) -> (_AzleResult);
+  createUser : (UserPayload) -> (_AzleResult_1);
+  rentBicycle : (text, RenterPayload) -> (_AzleResult_2);
+  returnBicycle : (text, text) -> (_AzleResult_3);
 }
