@@ -1,0 +1,5 @@
+service: () -> {
+    createUser: (text, text, int64) -> (int64);
+    rentBicycle: (int64, text) -> (int64);
+    returnBicycle: (int64) -> (bool);
+}
