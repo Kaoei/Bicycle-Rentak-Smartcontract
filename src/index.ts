@@ -48,6 +48,19 @@ export default Canister({
 
         return uniqueUserId;
     }),
+    addBicycle: update([text, bool], int64, (type, isAvailable) => {
+        const uniqueBicycleId = generateUniqueId();
+    
+        const newBicycle: Bicycle = {
+            bicycleId: uniqueBicycleId,
+            type: type,
+            isAvailable: isAvailable,
+        };
+    
+        bicycleDB.insert(uniqueBicycleId, newBicycle);
+    
+        return uniqueBicycleId;
+    }),
 
     rentBicycle: update([int64, text], int64, (userId, time) => {
         
